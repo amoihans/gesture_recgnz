@@ -95,8 +95,8 @@ export function updateSword(
   const damp = Math.pow(0.92, dt * 60); // 速度阻尼
   const angDamp = Math.pow(0.94, dt * 60);
 
-  // === 剑阵模式覆盖：所有剑绕中心旋转 ===
-  if (arrayMode) {
+  // === 剑阵模式：idle 时所有剑绕中心旋转，attack 时共享 mode 但每把剑有 phase 偏移 ===
+  if (arrayMode && sword.mode === "idle") {
     const orbitRadius = 0.25 + (index % 3) * 0.04;
     const baseAngle = (index / total) * TWO_PI + (now / 1500);
     const target = {
@@ -112,6 +112,15 @@ export function updateSword(
     sword.velocity.x *= damp;
     sword.velocity.y *= damp;
     pushTrail(sword, now);
+    return;
+  }
+
+  // === 剑阵共享模式：每把剑按各自 mode 执行，但所有剑一起启动同一动作 ===
+  // （手势切换时所有剑被同时 setSwordMode 为同一个 mapped mode）
+  if (arrayMode && sword.mode !== "idle") {
+    const phaseOffset = index * 80; // 每把剑延迟 80ms 启动，形成波浪效果
+    const adjustedNow = now - phaseOffset;
+    updateWithMode(sword, dt, adjustedNow, hand, damp);
     return;
   }
 
@@ -266,6 +275,154 @@ export function updateSword(
     case "toggle-array":
     case "sword-array":
       // 这两个模式由 arrayMode 在外层处理；这里走 idle 兜底
+      sword.velocity.x *= damp;
+      sword.velocity.y *= damp;
+      sword.position.x += sword.velocity.x * dt;
+      sword.position.y += sword.velocity.y * dt;
+      bounceAtBorder(sword);
+      break;
+  }
+
+  pushTrail(sword, now);
+}
+
+/**
+ * 按 sword.mode 执行具体的物理更新（单剑模式通用）
+ * 用于剑阵模式下让所有剑共享一个 mode 但每把剑有 phase 偏移
+ */
+function updateWithMode(
+  sword: Sword,
+  dt: number,
+  now: number,
+  hand: Vec2 | null,
+  damp: number,
+) {
+  switch (sword.mode) {
+    case "follow-palm": {
+      if (hand) {
+        const target = clampToScreen(hand);
+        sword.position.x = lerp(sword.position.x, target.x, 0.18);
+        sword.position.y = lerp(sword.position.y, target.y, 0.18);
+        const targetRot = Math.PI / 2 + Math.sin(now / 400) * 0.1;
+        sword.rotation = lerp(sword.rotation, targetRot, 0.15);
+      }
+      sword.velocity.x *= damp;
+      sword.velocity.y *= damp;
+      break;
+    }
+
+    case "embrace": {
+      if (hand) {
+        const t = (now - sword.modeStartedAt) / 600;
+        const radius = 0.08;
+        const target = {
+          x: hand.x + Math.cos(t) * radius,
+          y: hand.y + Math.sin(t * 1.3) * radius * 0.6,
+        };
+        sword.position.x = lerp(sword.position.x, target.x, 0.25);
+        sword.position.y = lerp(sword.position.y, target.y, 0.25);
+        const dx = hand.x - sword.position.x;
+        const dy = hand.y - sword.position.y;
+        sword.rotation = lerp(sword.rotation, Math.atan2(dy, dx) + Math.PI / 2, 0.3);
+      }
+      break;
+    }
+
+    case "thrust": {
+      sword.position.x += sword.velocity.x * dt;
+      sword.position.y += sword.velocity.y * dt;
+      sword.velocity.x *= 0.985;
+      sword.velocity.y *= 0.985;
+      if (
+        sword.position.x < -0.1 ||
+        sword.position.x > 1.1 ||
+        sword.position.y < -0.1 ||
+        sword.position.y > 1.1
+      ) {
+        sword.position.x = DEFAULT_SWORD_POSITION.x;
+        sword.position.y = DEFAULT_SWORD_POSITION.y;
+        sword.velocity.x = 0;
+        sword.velocity.y = 0;
+        sword.mode = "idle";
+        sword.modeStartedAt = now;
+      }
+      break;
+    }
+
+    case "dash": {
+      sword.position.x += sword.velocity.x * dt;
+      sword.position.y += sword.velocity.y * dt;
+      sword.velocity.x *= 0.97;
+      sword.velocity.y *= 0.97;
+      if (now - sword.modeStartedAt > 1200) {
+        sword.mode = "idle";
+        sword.modeStartedAt = now;
+      }
+      bounceAtBorder(sword, 0.02);
+      break;
+    }
+
+    case "recall": {
+      const target = { ...DEFAULT_SWORD_POSITION };
+      sword.position.x = lerp(sword.position.x, target.x, 0.06);
+      sword.position.y = lerp(sword.position.y, target.y, 0.06);
+      sword.velocity.x *= damp;
+      sword.velocity.y *= damp;
+      sword.rotation = lerp(sword.rotation, Math.PI / 2, 0.1);
+      if (dist(sword.position, target) < 0.01) {
+        sword.mode = "idle";
+        sword.modeStartedAt = now;
+      }
+      break;
+    }
+
+    case "slash": {
+      const phase = (now - sword.modeStartedAt) / 1000;
+      if (phase < 0.4) {
+        sword.rotation += Math.sin(now / 30) * 0.05;
+        sword.velocity.x *= damp;
+        sword.velocity.y *= damp;
+      } else if (phase < 0.7) {
+        sword.rotation += Math.PI * dt * 4;
+        sword.position.x += sword.velocity.x * dt;
+        sword.position.y += sword.velocity.y * dt;
+        sword.velocity.x *= 0.95;
+        sword.velocity.y *= 0.95;
+      } else {
+        sword.mode = "idle";
+        sword.modeStartedAt = now;
+      }
+      break;
+    }
+
+    case "burst": {
+      const t = (now - sword.modeStartedAt) / 1000;
+      sword.rotation += dt * (8 - t * 4);
+      sword.velocity.x *= damp;
+      sword.velocity.y *= damp;
+      if (t > 2) {
+        sword.mode = "idle";
+        sword.modeStartedAt = now;
+      }
+      break;
+    }
+
+    case "circle": {
+      const t = (now - sword.modeStartedAt) / 1500;
+      if (t < 1) {
+        const angle = t * TWO_PI;
+        sword.position.x = 0.5 + Math.cos(angle) * 0.35;
+        sword.position.y = 0.5 + Math.sin(angle) * 0.35;
+        sword.rotation = angle + Math.PI / 2;
+      } else {
+        sword.mode = "idle";
+        sword.modeStartedAt = now;
+      }
+      break;
+    }
+
+    default:
+      // idle / sword-array / toggle-array 兜底
       sword.velocity.x *= damp;
       sword.velocity.y *= damp;
       sword.position.x += sword.velocity.x * dt;
