@@ -13,6 +13,9 @@ import { GestureGuide } from "@/components/GestureGuide";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { SwordCanvas } from "@/sword/SwordCanvas";
+import { SwordHUD } from "@/sword/SwordHUD";
+import { useSwordControl } from "@/sword/useSwordControl";
 import type { HandResult } from "@/types/gestures";
 
 // MediaPipe HandLandmarker 标准骨架连接
@@ -35,6 +38,9 @@ export default function HomePage() {
   const camera = useCamera({ videoRef });
   const detection = useHandDetection(videoRef, camera.status === "ready");
   const recognition = useGestureRecognizer(detection.hands);
+  const sword = useSwordControl({
+    current: recognition.current,
+  });
 
   // 页面加载后自动尝试启动摄像头
   useEffect(() => {
@@ -226,6 +232,19 @@ export default function HomePage() {
             <GestureGuide active={recognition.current?.name ?? null} />
           </aside>
         </div>
+
+        {/* 御剑术 — 全屏 Canvas 渲染层 */}
+        <SwordCanvas
+          stateRef={sword.stateRef}
+          hands={detection.hands}
+          arrayMode={sword.arrayMode}
+        />
+
+        {/* 剑模式指示器 */}
+        <SwordHUD
+          arrayMode={sword.arrayMode}
+          lastCommand={sword.lastCommand}
+        />
       </div>
     </ErrorBoundary>
   );

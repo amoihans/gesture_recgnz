@@ -1,5 +1,5 @@
 /**
- * GestureGuide — 侧边栏手势图例（10 种手势）
+ * GestureGuide — 侧边栏手势图例（10 种手势 + 御剑术映射）
  */
 
 import { GESTURE_ACTIONS, GESTURE_ORDER } from "@/lib/gestureActions";
@@ -11,13 +11,27 @@ interface Props {
   active: GestureName | null;
 }
 
+/** 手势 → 御剑动作说明 */
+const SWORD_ACTIONS: Partial<Record<GestureName, string>> = {
+  open_palm: "御剑·随 — 剑跟随掌心移动",
+  closed_fist: "御剑·缠 — 剑环绕拳头旋转",
+  pointing_up: "御剑·刺 — 剑朝指向冲刺",
+  victory: "切换 — 单剑 ↔ 12 把剑阵",
+  thumb_up: "御剑·冲 — 向前加速冲刺",
+  thumb_down: "御剑·归 — 缓慢回到默认位",
+  iloveyou: "御剑·斩 — 横斩攻击（释放波）",
+  ok_sign: "御剑·爆 — 释放环形剑气",
+  call: "召唤 — 释放 12 把剑阵",
+  wave: "御剑·绕 — 剑绕中心扫一圈",
+};
+
 export function GestureGuide({ active }: Props) {
   return (
     <div className="flex h-full flex-col gap-4">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">手势图例</h2>
         <p className="text-xs text-muted-foreground">
-          做出下列任意手势，屏幕中央会显示对应的中文动作词
+          做出下列任意手势，屏幕中央会显示对应的中文动作词，并触发御剑术
         </p>
       </div>
 
@@ -25,6 +39,7 @@ export function GestureGuide({ active }: Props) {
         {GESTURE_ORDER.map((name) => {
           const info = GESTURE_ACTIONS[name];
           const isActive = active === name;
+          const swordDesc = SWORD_ACTIONS[name];
           return (
             <Card
               key={name}
@@ -49,9 +64,11 @@ export function GestureGuide({ active }: Props) {
                       {info.description}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {info.en}
-                  </div>
+                  {swordDesc && (
+                    <div className="mt-0.5 text-xs text-cyan-600 dark:text-cyan-400">
+                      ⚔ {swordDesc}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -65,6 +82,7 @@ export function GestureGuide({ active }: Props) {
           <li>手掌朝向摄像头效果最佳</li>
           <li>保持手势约 0.3 秒以确认</li>
           <li>挥手时左右摆动手掌</li>
+          <li>✌️ 切换剑阵模式（12 把剑环绕）</li>
         </ul>
       </div>
     </div>
