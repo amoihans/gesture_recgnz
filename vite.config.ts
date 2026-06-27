@@ -31,8 +31,16 @@ function suppressMediaPipeSourceMapWarning(): Plugin {
   }
 }
 
+// GitHub Pages 部署在用户名子路径下，例如
+//   https://amoihans.github.io/gesture_recgnz/
+// 所以 base 应设为 '/gesture_recgnz/'；本地开发时保持 '/'
+const BASE = process.env.GITHUB_PAGES
+  ? '/gesture_recgnz/'
+  : '/'
+
 // https://vite.dev/config/
 export default defineConfig({
+  base: BASE,
   plugins: [react(), tailwindcss(), suppressMediaPipeSourceMapWarning()],
   resolve: {
     alias: {
